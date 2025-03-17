@@ -94,6 +94,7 @@ recompute path. Also, it enables more complicated dependencies beyond trees.
 #include <Base/TimeInfo.h>
 #include <Base/Reader.h>
 #include <Base/Writer.h>
+#include <Base/Profiler.h>
 #include <Base/Tools.h>
 #include <Base/Uuid.h>
 #include <Base/Sequencer.h>
@@ -2963,6 +2964,8 @@ int Document::recompute(const std::vector<App::DocumentObject*>& objs,
                         bool* hasError,
                         int options)
 {
+    ZoneScoped;
+
     if (d->undoing || d->rollback) {
         if (FC_LOG_INSTANCE.isEnabled(FC_LOGLEVEL_LOG)) {
             FC_WARN("Ignore document recompute on undo/redo");
@@ -3367,7 +3370,7 @@ int Document::_recomputeFeature(DocumentObject* Feat)
         return 1;
     }
     catch (std::exception& e) {
-        FC_ERR("exception in " << Feat->getFullName() << " thrown: " << e.what());
+        FC_ERR("Exception in " << Feat->getFullName() << " thrown: " << e.what());
         d->addRecomputeLog(e.what(), Feat);
         return 1;
     }
@@ -3391,26 +3394,25 @@ int Document::_recomputeFeature(DocumentObject* Feat)
     return 0;
 }
 
-bool Document::recomputeFeature(DocumentObject* Feat, bool recursive)
+bool Document::recomputeFeature(DocumentObject* feature, bool recursive)
 {
     // delete recompute log
-    d->clearRecomputeLog(Feat);
+    d->clearRecomputeLog(feature);
 
     // verify that the feature is (active) part of the document
-    if (Feat->isAttachedToDocument()) {
-        if (recursive) {
-            bool hasError = false;
-            recompute({Feat}, true, &hasError);
-            return !hasError;
-        }
-        else {
-            _recomputeFeature(Feat);
-            signalRecomputedObject(*Feat);
-            return Feat->isValid();
-        }
+    if (!feature->isAttachedToDocument()) {
+        return false;
+    }
+
+    if (recursive) {
+        bool hasError = false;
+        recompute({feature}, true, &hasError);
+        return !hasError;
     }
     else {
-        return false;
+        _recomputeFeature(feature);
+        signalRecomputedObject(*feature);
+        return feature->isValid();
     }
 }
 
